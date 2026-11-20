@@ -1,0 +1,387 @@
+[
+  {
+    "heading": "API",
+    "text": "API\n\n> Note: Ollama's API docs are moving to https://docs.ollama.com/api\n\n",
+    "index": 0
+  },
+  {
+    "heading": "API > Endpoints",
+    "text": "API > Endpoints\n\n- [Generate a completion](#generate-a-completion)\n- [Generate a chat completion](#generate-a-chat-completion)\n- [Create a Model](#create-a-model)\n- [List Local Models](#list-local-models)\n- [Show Model Information](#show-model-information)\n- [Copy a Model](#copy-a-model)\n- [Delete a Model](#delete-a-model)\n- [Pull a Model](#pull-a-model)\n- [Push a Model](#push-a-model)\n- [Generate Embeddings](#generate-embeddings)\n- [List Running Models](#list-running-models)\n- [Version](#version)\n\n",
+    "index": 1
+  },
+  {
+    "heading": "API > Conventions > Model names",
+    "text": "API > Conventions > Model names\n\nModel names follow a `model:tag` format, where `model` can have an optional namespace such as `example/model`. Some examples are `orca-mini:3b-q8_0` and `llama3:70b`. The tag is optional and, if not provided, will default to `latest`. The tag is used to identify a specific version.\n\n",
+    "index": 2
+  },
+  {
+    "heading": "API > Conventions > Durations",
+    "text": "API > Conventions > Durations\n\nAll durations are returned in nanoseconds.\n\n",
+    "index": 3
+  },
+  {
+    "heading": "API > Conventions > Streaming responses",
+    "text": "API > Conventions > Streaming responses\n\nCertain endpoints stream responses as JSON objects. Streaming can be disabled by providing `{\"stream\": false}` for these endpoints.\n\n",
+    "index": 4
+  },
+  {
+    "heading": "API > Generate a completion",
+    "text": "API > Generate a completion\n\n```\nPOST /api/generatef\n```\n\nGenerate a response for a given prompt with a provided model. This is a streaming endpoint, so there will be a series of responses. The final response object will include statistics and additional data from the request.\n\n",
+    "index": 5
+  },
+  {
+    "heading": "API > Generate a completion > Parameters",
+    "text": "API > Generate a completion > Parameters\n\n- `model`: (required) the [model name](#model-names)\n- `prompt`: the prompt to generate a response for\n- `suffix`: the text after the model response\n- `images`: (optional) a list of base64-encoded images (for multimodal models such as `llava`)\n- `think`: (for thinking models) should the model think before responding? Can be a boolean or a thinking level (`\"low\"`, `\"medium\"`, `\"high\"`, or `\"max\"`).\n\nAdvanced parameters (optional):\n\n- `format`: the format to return a response in. Format can be `json` or a JSON schema\n- `options`: additional model parameters listed in the documentation for the [Modelfile](./modelfile.mdx#valid-parameters-and-values) such as `temperature`\n- `system`: system message to (overrides what is defined in the `Modelfile`)\n- `template`: the prompt template to use (overrides what is defined in the `Modelfile`)\n- `stream`: if `false` the response will be returned as a single response object, rather than a stream of objects\n- `raw`: if `true` no formatting will be applied to the prompt. You may choose to use the `raw` parameter if you are specifying a full templated prompt in your request to the API\n- `keep_alive`: controls how long the model will stay loaded into memory following the request (default: `5m`)\n- `context` (deprecated): the context parameter returned from a previous request to `/generate`, this can be used to keep a short conversational memory\n\n",
+    "index": 6
+  },
+  {
+    "heading": "API > Generate a completion > Parameters > Structured outputs",
+    "text": "API > Generate a completion > Parameters > Structured outputs\n\nStructured outputs are supported by providing a JSON schema in the `format` parameter. The model will generate a response that matches the schema. See the [structured outputs](#request-structured-outputs) example below.\n\n",
+    "index": 7
+  },
+  {
+    "heading": "API > Generate a completion > Parameters > JSON mode",
+    "text": "API > Generate a completion > Parameters > JSON mode\n\nEnable JSON mode by setting the `format` parameter to `json`. This will structure the response as a valid JSON object. See the JSON mode [example](#request-json-mode) below.\n\n> [!IMPORTANT]\n> It's important to instruct the model to use JSON in the `prompt`. Otherwise, the model may generate large amounts whitespace.\n\n",
+    "index": 8
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Generate request (Streaming)",
+    "text": "API > Generate a completion > Examples > Generate request (Streaming)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llama3.2\",\n \"prompt\": \"Why is the sky blue?\"\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T08:52:19.385406455-07:00\",\n \"response\": \"The\",\n \"done\": false\n}\n```\n\nThe final response in the stream also includes additional data about the generation:\n\n- `total_duration`: time spent generating the response\n- `load_duration`: time spent in nanoseconds loading the model\n- `prompt_eval_count`: number of tokens in the prompt\n- `prompt_eval_cached_count`: number of prompt tokens read from the cache\n- `prompt_eval_duration`: time spent in nanoseconds evaluating uncached prompt tokens\n- `eval_count`: number of tokens in the response\n- `eval_duration`: time in nanoseconds spent generating the response\n- `context`: an encoding of the conversation used in this response, this can be sent in the next request to keep a conversational memory\n- `response`: empty if the response was streamed, if not streamed, this will contain the full response\n\nTo calculate how fast the response is generated in tokens per second (token/s), divide `eval_count` / `eval_duration` \\* `10^9`.\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T19:22:45.499127Z\",\n \"response\": \"\",\n \"done\": true,\n \"context\": [1, 2, 3],\n \"total_duration\": 10706818083,\n \"load_duration\": 6338219291,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 130079000,\n \"eval_count\": 259,\n \"eval_duration\": 4232710000\n}\n```\n\n",
+    "index": 9
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (No streaming)",
+    "text": "API > Generate a completion > Examples > Request (No streaming)\n\n Request\n\nA response can be received in one reply when streaming is off.\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llama3.2\",\n \"prompt\": \"Why is the sky blue?\",\n \"stream\": false\n}'\n```\n\n Response\n\nIf `stream` is set to `false`, the response will be a single JSON object:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T19:22:45.499127Z\",\n \"response\": \"The sky is blue because it is the color of the sky.\",\n \"done\": true,\n \"context\": [1, 2, 3],\n \"total_duration\": 5043500667,\n \"load_duration\": 5025959,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 325953000,\n \"eval_count\": 290,\n \"eval_duration\": 4709213000\n}\n```\n\n",
+    "index": 10
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (with suffix)",
+    "text": "API > Generate a completion > Examples > Request (with suffix)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"codellama:code\",\n \"prompt\": \"def compute_gcd(a, b):\",\n \"suffix\": \" return result\",\n \"options\": {\n \"temperature\": 0\n },\n \"stream\": false\n}'\n```\n\n Response\n\n```json5\n{\n \"model\": \"codellama:code\",\n \"created_at\": \"2024-07-22T20:47:51.147561Z\",\n \"response\": \"\\n if a == 0:\\n return b\\n else:\\n return compute_gcd(b % a, a)\\n\\ndef compute_lcm(a, b):\\n result = (a * b) / compute_gcd(a, b)\\n\",\n \"done\": true,\n \"done_reason\": \"stop\",\n \"context\": [...],\n \"total_duration\": 1162761250,\n \"load_duration\": 6683708,\n \"prompt_eval_count\": 17,\n \"prompt_eval_duration\": 201222000,\n \"eval_count\": 63,\n \"eval_duration\": 953997000\n}\n```\n\n",
+    "index": 11
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (Structured outputs)",
+    "text": "API > Generate a completion > Examples > Request (Structured outputs)\n\n Request\n\n```shell\ncurl -X POST http://localhost:11434/api/generate -H \"Content-Type: application/json\" -d '{\n \"model\": \"llama3.1:8b\",\n \"prompt\": \"Ollama is 22 years old and is busy saving the world. Respond using JSON\",\n \"stream\": false,\n \"format\": {\n \"type\": \"object\",\n \"properties\": {\n \"age\": {\n \"type\": \"integer\"\n },\n \"available\": {\n \"type\": \"boolean\"\n }\n },\n \"required\": [\n \"age\",\n \"available\"\n ]\n }\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.1:8b\",\n \"created_at\": \"2024-12-06T00:48:09.983619Z\",\n \"response\": \"{\\n \\\"age\\\": 22,\\n \\\"available\\\": true\\n}\",\n \"done\": true,\n \"done_reason\": \"stop\",\n \"context\": [1, 2, 3],\n \"total_duration\": 1075509083,\n \"load_duration\": 567678166,\n \"prompt_eval_count\": 28,\n \"prompt_eval_duration\": 236000000,\n \"eval_count\": 16,\n \"eval_duration\": 269000000\n}\n```\n\n",
+    "index": 12
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (JSON mode)",
+    "text": "API > Generate a completion > Examples > Request (JSON mode)\n\n> [!IMPORTANT]\n> When `format` is set to `json`, the output will always be a well-formed JSON object. It's important to also instruct the model to respond in JSON.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llama3.2\",\n \"prompt\": \"What color is the sky at different times of the day? Respond using JSON\",\n \"format\": \"json\",\n \"stream\": false\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-11-09T21:07:55.186497Z\",\n \"response\": \"{\\n\\\"morning\\\": {\\n\\\"color\\\": \\\"blue\\\"\\n},\\n\\\"noon\\\": {\\n\\\"color\\\": \\\"blue-gray\\\"\\n},\\n\\\"afternoon\\\": {\\n\\\"color\\\": \\\"warm gray\\\"\\n},\\n\\\"evening\\\": {\\n\\\"color\\\": \\\"orange\\\"\\n}\\n}\\n\",\n \"done\": true,\n \"context\": [1, 2, 3],\n \"total_duration\": 4648158584,\n \"load_duration\": 4071084,\n \"prompt_eval_count\": 36,\n \"prompt_eval_duration\": 439038000,\n \"eval_count\": 180,\n \"eval_duration\": 4196918000\n}\n```\n\nThe value of `response` will be a string containing JSON similar to:\n\n```json\n{\n \"morning\": {\n \"color\": \"blue\"\n },\n \"noon\": {\n \"color\": \"blue-gray\"\n },\n \"afternoon\": {\n \"color\": \"warm gray\"\n },\n \"evening\": {\n \"color\": \"orange\"\n }\n}\n```\n\n",
+    "index": 13
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (with images)",
+    "text": "API > Generate a completion > Examples > Request (with images)\n\nTo submit images to multimodal models such as `llava` or `bakllava`, provide a list of base64-encoded `images`:\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llava\",\n \"prompt\":\"What is in this picture?\",\n \"stream\": false,\n \"images\": [\"<img-binary>\"]\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llava\",\n \"created_at\": \"2023-11-03T15:36:02.583064Z\",\n \"response\": \"A happy cartoon character, which is cute and cheerful.\",\n \"done\": true,\n \"context\": [1, 2, 3],\n \"total_duration\": 2938432250,\n \"load_duration\": 2559292,\n \"prompt_eval_count\": 1,\n \"prompt_eval_duration\": 2195557000,\n \"eval_count\": 44,\n \"eval_duration\": 736432000\n}\n```\n\n",
+    "index": 14
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (Raw Mode)",
+    "text": "API > Generate a completion > Examples > Request (Raw Mode)\n\nIn some cases, you may wish to bypass the templating system and provide a full prompt. In this case, you can use the `raw` parameter to disable templating. Also note that raw mode will not return a context.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"mistral\",\n \"prompt\": \"[INST] why is the sky blue? [/INST]\",\n \"raw\": true,\n \"stream\": false\n}'\n```\n\n",
+    "index": 15
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Request (Reproducible outputs)",
+    "text": "API > Generate a completion > Examples > Request (Reproducible outputs)\n\nFor reproducible outputs, set `seed` to a number:\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"mistral\",\n \"prompt\": \"Why is the sky blue?\",\n \"options\": {\n \"seed\": 123\n }\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"mistral\",\n \"created_at\": \"2023-11-03T15:36:02.583064Z\",\n \"response\": \" The sky appears blue because of a phenomenon called Rayleigh scattering.\",\n \"done\": true,\n \"total_duration\": 8493852375,\n \"load_duration\": 6589624375,\n \"prompt_eval_count\": 14,\n \"prompt_eval_duration\": 119039000,\n \"eval_count\": 110,\n \"eval_duration\": 1779061000\n}\n```\n\n",
+    "index": 16
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Generate request (With options)",
+    "text": "API > Generate a completion > Examples > Generate request (With options)\n\nIf you want to set custom options for the model at runtime rather than in the Modelfile, you can do so with the `options` parameter. This example sets every available option, but you can set any of them individually and omit the ones you do not want to override.\n\n`typical_p` is deprecated and may be removed in a future release.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llama3.2\",\n \"prompt\": \"Why is the sky blue?\",\n \"stream\": false,\n \"options\": {\n \"num_keep\": 5,\n \"seed\": 42,\n \"num_predict\": 100,\n \"draft_num_predict\": 4,\n \"top_k\": 20,\n \"top_p\": 0.9,\n \"min_p\": 0.0,\n \"repeat_last_n\": 33,\n \"temperature\": 0.8,\n \"repeat_penalty\": 1.2,\n \"presence_penalty\": 1.5,\n \"frequency_penalty\": 1.0,\n \"penalize_newline\": true,\n \"stop\": [\"\\n\", \"user:\"],\n \"numa\": false,\n \"num_ctx\": 1024,\n \"num_batch\": 2,\n \"num_gpu\": 1,\n \"main_gpu\": 0,\n \"use_mmap\": true,\n \"num_thread\": 8\n }\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T19:22:45.499127Z\",\n \"response\": \"The sky is blue because it is the color of the sky.\",\n \"done\": true,\n \"context\": [1, 2, 3],\n \"total_duration\": 4935886791,\n \"load_duration\": 534986708,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 107345000,\n \"eval_count\": 237,\n \"eval_duration\": 4289432000\n}\n```\n\n",
+    "index": 17
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Load a model",
+    "text": "API > Generate a completion > Examples > Load a model\n\nIf an empty prompt is provided, the model will be loaded into memory.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llama3.2\"\n}'\n```\n\n Response\n\nA single JSON object is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-12-18T19:52:07.071755Z\",\n \"response\": \"\",\n \"done\": true\n}\n```\n\n",
+    "index": 18
+  },
+  {
+    "heading": "API > Generate a completion > Examples > Unload a model",
+    "text": "API > Generate a completion > Examples > Unload a model\n\nIf an empty prompt is provided and the `keep_alive` parameter is set to `0`, a model will be unloaded from memory.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/generate -d '{\n \"model\": \"llama3.2\",\n \"keep_alive\": 0\n}'\n```\n\n Response\n\nA single JSON object is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2024-09-12T03:54:03.516566Z\",\n \"response\": \"\",\n \"done\": true,\n \"done_reason\": \"unload\"\n}\n```\n\n",
+    "index": 19
+  },
+  {
+    "heading": "API > Generate a chat completion",
+    "text": "API > Generate a chat completion\n\n```\nPOST /api/chat\n```\n\nGenerate the next message in a chat with a provided model. This is a streaming endpoint, so there will be a series of responses. Streaming can be disabled using `\"stream\": false`. The final response object will include statistics and additional data from the request.\n\n",
+    "index": 20
+  },
+  {
+    "heading": "API > Generate a chat completion > Parameters",
+    "text": "API > Generate a chat completion > Parameters\n\n- `model`: (required) the [model name](#model-names)\n- `messages`: the messages of the chat, this can be used to keep a chat memory\n- `tools`: list of tools in JSON for the model to use if supported\n- `think`: (for thinking models) should the model think before responding? Can be a boolean or a thinking level (`\"low\"`, `\"medium\"`, `\"high\"`, or `\"max\"`).\n\nThe `message` object has the following fields:\n\n- `role`: the role of the message, either `system`, `user`, `assistant`, or `tool`\n- `content`: the content of the message\n- `thinking`: (for thinking models) the model's thinking process\n- `images` (optional): a list of images to include in the message (for multimodal models such as `llava`)\n- `tool_calls` (optional): a list of tools in JSON that the model wants to use\n- `tool_name` (optional): add the name of the tool that was executed to inform the model of the result\n\nAdvanced parameters (optional):\n\n- `format`: the format to return a response in. Format can be `json` or a JSON schema.\n- `options`: additional model parameters listed in the documentation for the [Modelfile](./modelfile.mdx#valid-parameters-and-values) such as `temperature`\n- `stream`: if `false` the response will be returned as a single response object, rather than a stream of objects\n- `keep_alive`: controls how long the model will stay loaded into memory following the request (default: `5m`)\n\n",
+    "index": 21
+  },
+  {
+    "heading": "API > Generate a chat completion > Tool calling",
+    "text": "API > Generate a chat completion > Tool calling\n\nTool calling is supported by providing a list of tools in the `tools` parameter. The model will generate a response that includes a list of tool calls. See the [Chat request (Streaming with tools)](#chat-request-streaming-with-tools) example below.\n\nModels can also explain the result of the tool call in the response. See the [Chat request (With history, with tools)](#chat-request-with-history-with-tools) example below.\n\n[See models with tool calling capabilities](https://ollama.com/search?c=tool).\n\n",
+    "index": 22
+  },
+  {
+    "heading": "API > Generate a chat completion > Structured outputs",
+    "text": "API > Generate a chat completion > Structured outputs\n\nStructured outputs are supported by providing a JSON schema in the `format` parameter. The model will generate a response that matches the schema. See the [Chat request (Structured outputs)](#chat-request-structured-outputs) example below.\n\n",
+    "index": 23
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (Streaming)",
+    "text": "API > Generate a chat completion > Examples > Chat request (Streaming)\n\n Request\n\nSend a chat message with a streaming response.\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"why is the sky blue?\"\n }\n ]\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T08:52:19.385406455-07:00\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"The\",\n \"images\": null\n },\n \"done\": false\n}\n```\n\nFinal response:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T19:22:45.499127Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\"\n },\n \"done\": true,\n \"total_duration\": 4883583458,\n \"load_duration\": 1334875,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 342546000,\n \"eval_count\": 282,\n \"eval_duration\": 4535599000\n}\n```\n\n",
+    "index": 24
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (Streaming with tools)",
+    "text": "API > Generate a chat completion > Examples > Chat request (Streaming with tools)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"what is the weather in tokyo?\"\n }\n ],\n \"tools\": [\n {\n \"type\": \"function\",\n \"function\": {\n \"name\": \"get_weather\",\n \"description\": \"Get the weather in a given city\",\n \"parameters\": {\n \"type\": \"object\",\n \"properties\": {\n \"city\": {\n \"type\": \"string\",\n \"description\": \"The city to get the weather for\"\n }\n },\n \"required\": [\"city\"]\n }\n }\n }\n ],\n \"stream\": true\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2025-07-07T20:22:19.184789Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\",\n \"tool_calls\": [\n {\n \"function\": {\n \"name\": \"get_weather\",\n \"arguments\": {\n \"city\": \"Tokyo\"\n }\n }\n }\n ]\n },\n \"done\": false\n}\n```\n\nFinal response:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2025-07-07T20:22:19.19314Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\"\n },\n \"done_reason\": \"stop\",\n \"done\": true,\n \"total_duration\": 182242375,\n \"load_duration\": 41295167,\n \"prompt_eval_count\": 169,\n \"prompt_eval_duration\": 24573166,\n \"eval_count\": 15,\n \"eval_duration\": 115959084\n}\n```\n\n",
+    "index": 25
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (No streaming)",
+    "text": "API > Generate a chat completion > Examples > Chat request (No streaming)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"why is the sky blue?\"\n }\n ],\n \"stream\": false\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-12-12T14:13:43.416799Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"Hello! How are you today?\"\n },\n \"done\": true,\n \"total_duration\": 5191566416,\n \"load_duration\": 2154458,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 383809000,\n \"eval_count\": 298,\n \"eval_duration\": 4799921000\n}\n```\n\n",
+    "index": 26
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (No streaming, with tools)",
+    "text": "API > Generate a chat completion > Examples > Chat request (No streaming, with tools)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"what is the weather in tokyo?\"\n }\n ],\n \"tools\": [\n {\n \"type\": \"function\",\n \"function\": {\n \"name\": \"get_weather\",\n \"description\": \"Get the weather in a given city\",\n \"parameters\": {\n \"type\": \"object\",\n \"properties\": {\n \"city\": {\n \"type\": \"string\",\n \"description\": \"The city to get the weather for\"\n }\n },\n \"required\": [\"city\"]\n }\n }\n }\n ],\n \"stream\": false\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2025-07-07T20:32:53.844124Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\",\n \"tool_calls\": [\n {\n \"function\": {\n \"name\": \"get_weather\",\n \"arguments\": {\n \"city\": \"Tokyo\"\n }\n }\n }\n ]\n },\n \"done_reason\": \"stop\",\n \"done\": true,\n \"total_duration\": 3244883583,\n \"load_duration\": 2969184542,\n \"prompt_eval_count\": 169,\n \"prompt_eval_duration\": 141656333,\n \"eval_count\": 18,\n \"eval_duration\": 133293625\n}\n```\n\n",
+    "index": 27
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (Structured outputs)",
+    "text": "API > Generate a chat completion > Examples > Chat request (Structured outputs)\n\n Request\n\n```shell\ncurl -X POST http://localhost:11434/api/chat -H \"Content-Type: application/json\" -d '{\n \"model\": \"llama3.1\",\n \"messages\": [{\"role\": \"user\", \"content\": \"Ollama is 22 years old and busy saving the world. Return a JSON object with the age and availability.\"}],\n \"stream\": false,\n \"format\": {\n \"type\": \"object\",\n \"properties\": {\n \"age\": {\n \"type\": \"integer\"\n },\n \"available\": {\n \"type\": \"boolean\"\n }\n },\n \"required\": [\n \"age\",\n \"available\"\n ]\n },\n \"options\": {\n \"temperature\": 0\n }\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.1\",\n \"created_at\": \"2024-12-06T00:46:58.265747Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"{\\\"age\\\": 22, \\\"available\\\": false}\"\n },\n \"done_reason\": \"stop\",\n \"done\": true,\n \"total_duration\": 2254970291,\n \"load_duration\": 574751416,\n \"prompt_eval_count\": 34,\n \"prompt_eval_duration\": 1502000000,\n \"eval_count\": 12,\n \"eval_duration\": 175000000\n}\n```\n\n",
+    "index": 28
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (With History)",
+    "text": "API > Generate a chat completion > Examples > Chat request (With History)\n\nSend a chat message with a conversation history. You can use this same approach to start the conversation using multi-shot or chain-of-thought prompting.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"why is the sky blue?\"\n },\n {\n \"role\": \"assistant\",\n \"content\": \"due to rayleigh scattering.\"\n },\n {\n \"role\": \"user\",\n \"content\": \"how is that different than mie scattering?\"\n }\n ]\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T08:52:19.385406455-07:00\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"The\"\n },\n \"done\": false\n}\n```\n\nFinal response:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-08-04T19:22:45.499127Z\",\n \"done\": true,\n \"total_duration\": 8113331500,\n \"load_duration\": 6396458,\n \"prompt_eval_count\": 61,\n \"prompt_eval_duration\": 398801000,\n \"eval_count\": 468,\n \"eval_duration\": 7701267000\n}\n```\n\n",
+    "index": 29
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (With history, with tools)",
+    "text": "API > Generate a chat completion > Examples > Chat request (With history, with tools)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"what is the weather in Toronto?\"\n },\n // the message from the model appended to history\n {\n \"role\": \"assistant\",\n \"content\": \"\",\n \"tool_calls\": [\n {\n \"function\": {\n \"name\": \"get_weather\",\n \"arguments\": {\n \"city\": \"Toronto\"\n }\n }\n }\n ]\n },\n // the tool call result appended to history\n {\n \"role\": \"tool\",\n \"content\": \"11 degrees celsius\",\n \"tool_name\": \"get_weather\"\n }\n ],\n \"stream\": false,\n \"tools\": [\n {\n \"type\": \"function\",\n \"function\": {\n \"name\": \"get_weather\",\n \"description\": \"Get the weather in a given city\",\n \"parameters\": {\n \"type\": \"object\",\n \"properties\": {\n \"city\": {\n \"type\": \"string\",\n \"description\": \"The city to get the weather for\"\n }\n },\n \"required\": [\"city\"]\n }\n }\n }\n ]\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2025-07-07T20:43:37.688511Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"The current temperature in Toronto is 11°C.\"\n },\n \"done_reason\": \"stop\",\n \"done\": true,\n \"total_duration\": 890771750,\n \"load_duration\": 707634750,\n \"prompt_eval_count\": 94,\n \"prompt_eval_duration\": 91703208,\n \"eval_count\": 11,\n \"eval_duration\": 90282125\n}\n```\n\n",
+    "index": 30
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (with images)",
+    "text": "API > Generate a chat completion > Examples > Chat request (with images)\n\n Request\n\nSend a chat message with images. The images should be provided as an array, with the individual images encoded in Base64.\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llava\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"what is in this image?\",\n \"images\": [\"<img-binary>\"]\n }\n ]\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llava\",\n \"created_at\": \"2023-12-13T22:42:50.203334Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \" The image features a cute, little pig with an angry facial expression. It's wearing a heart on its shirt and is waving in the air. This scene appears to be part of a drawing or sketching project.\",\n \"images\": null\n },\n \"done\": true,\n \"total_duration\": 1668506709,\n \"load_duration\": 1986209,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 359682000,\n \"eval_count\": 83,\n \"eval_duration\": 1303285000\n}\n```\n\n",
+    "index": 31
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (Reproducible outputs)",
+    "text": "API > Generate a chat completion > Examples > Chat request (Reproducible outputs)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"Hello!\"\n }\n ],\n \"options\": {\n \"seed\": 101,\n \"temperature\": 0\n }\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2023-12-12T14:13:43.416799Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"Hello! How are you today?\"\n },\n \"done\": true,\n \"total_duration\": 5191566416,\n \"load_duration\": 2154458,\n \"prompt_eval_count\": 26,\n \"prompt_eval_duration\": 383809000,\n \"eval_count\": 298,\n \"eval_duration\": 4799921000\n}\n```\n\n",
+    "index": 32
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Chat request (with tools)",
+    "text": "API > Generate a chat completion > Examples > Chat request (with tools)\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [\n {\n \"role\": \"user\",\n \"content\": \"What is the weather today in Paris?\"\n }\n ],\n \"stream\": false,\n \"tools\": [\n {\n \"type\": \"function\",\n \"function\": {\n \"name\": \"get_current_weather\",\n \"description\": \"Get the current weather for a location\",\n \"parameters\": {\n \"type\": \"object\",\n \"properties\": {\n \"location\": {\n \"type\": \"string\",\n \"description\": \"The location to get the weather for, e.g. San Francisco, CA\"\n },\n \"format\": {\n \"type\": \"string\",\n \"description\": \"The format to return the weather in, e.g. 'celsius' or 'fahrenheit'\",\n \"enum\": [\"celsius\", \"fahrenheit\"]\n }\n },\n \"required\": [\"location\", \"format\"]\n }\n }\n }\n ]\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2024-07-22T20:33:28.123648Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\",\n \"tool_calls\": [\n {\n \"function\": {\n \"name\": \"get_current_weather\",\n \"arguments\": {\n \"format\": \"celsius\",\n \"location\": \"Paris, FR\"\n }\n }\n }\n ]\n },\n \"done_reason\": \"stop\",\n \"done\": true,\n \"total_duration\": 885095291,\n \"load_duration\": 3753500,\n \"prompt_eval_count\": 122,\n \"prompt_eval_duration\": 328493000,\n \"eval_count\": 33,\n \"eval_duration\": 552222000\n}\n```\n\n",
+    "index": 33
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Load a model",
+    "text": "API > Generate a chat completion > Examples > Load a model\n\nIf the messages array is empty, the model will be loaded into memory.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": []\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2024-09-12T21:17:29.110811Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\"\n },\n \"done_reason\": \"load\",\n \"done\": true\n}\n```\n\n",
+    "index": 34
+  },
+  {
+    "heading": "API > Generate a chat completion > Examples > Unload a model",
+    "text": "API > Generate a chat completion > Examples > Unload a model\n\nIf the messages array is empty and the `keep_alive` parameter is set to `0`, a model will be unloaded from memory.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/chat -d '{\n \"model\": \"llama3.2\",\n \"messages\": [],\n \"keep_alive\": 0\n}'\n```\n\n Response\n\nA single JSON object is returned:\n\n```json\n{\n \"model\": \"llama3.2\",\n \"created_at\": \"2024-09-12T21:33:17.547535Z\",\n \"message\": {\n \"role\": \"assistant\",\n \"content\": \"\"\n },\n \"done_reason\": \"unload\",\n \"done\": true\n}\n```\n\n",
+    "index": 35
+  },
+  {
+    "heading": "API > Create a Model",
+    "text": "API > Create a Model\n\n```\nPOST /api/create\n```\n\nCreate a model from:\n\n- another model;\n- a safetensors directory; or\n- one or more GGUF files.\n\nUse GGUF community tools to prepare and quantize GGUF files before importing.\n\nIf you are creating a model from a safetensors directory or from GGUF files, you must [push a blob](#push-a-blob) for each file and then use its file name and SHA256 digest in the `files` field.\n\n",
+    "index": 36
+  },
+  {
+    "heading": "API > Create a Model > Parameters",
+    "text": "API > Create a Model > Parameters\n\n- `model`: name of the model to create\n- `from`: (optional) name of an existing model to create the new model from\n- `files`: (optional) a dictionary of file names to SHA256 digests of blobs to create the model from\n- `template`: (optional) the prompt template for the model\n- `renderer`: (optional) the name of the renderer for the model\n- `parser`: (optional) the name of the parser for the model\n- `license`: (optional) a string or list of strings containing the license or licenses for the model\n- `system`: (optional) a string containing the system prompt for the model\n- `parameters`: (optional) a dictionary of parameters for the model (see [Modelfile](./modelfile.mdx#valid-parameters-and-values) for a list of parameters)\n- `messages`: (optional) a list of message objects used to create a conversation\n- `capabilities`: (optional) capabilities to add without removing inherited or inferred capabilities, such as `[\"decision\"]` for compatible decision models\n- `stream`: (optional) if `false` the response will be returned as a single response object, rather than a stream of objects\n- `quantize`: (optional) quantize safetensors model weights for MLX during import\n\n",
+    "index": 37
+  },
+  {
+    "heading": "API > Create a Model > Parameters > Quantization types",
+    "text": "API > Create a Model > Parameters > Quantization types\n\n| Type | Recommended |\n| ----- | :---------: |\n| nvfp4 | \\* |\n| mxfp8 | \\* |\n| mxfp4 | |\n| int4 | |\n| int8 | |\n\n",
+    "index": 38
+  },
+  {
+    "heading": "API > Create a Model > Examples > Create a new model",
+    "text": "API > Create a Model > Examples > Create a new model\n\nCreate a new model from an existing model.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/create -d '{\n \"model\": \"mario\",\n \"from\": \"llama3.2\",\n \"system\": \"You are Mario from Super Mario Bros.\"\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```json\n{\"status\":\"reading model metadata\"}\n{\"status\":\"creating system layer\"}\n{\"status\":\"using already created layer sha256:22f7f8ef5f4c791c1b03d7eb414399294764d7cc82c7e94aa81a1feb80a983a2\"}\n{\"status\":\"using already created layer sha256:8c17c2ebb0ea011be9981cc3922db8ca8fa61e828c5d3f44cb6ae342bf80460b\"}\n{\"status\":\"using already created layer sha256:7c23fb36d80141c4ab8cdbb61ee4790102ebd2bf7aeff414453177d4f2110e5d\"}\n{\"status\":\"using already created layer sha256:2e0493f67d0c8c9c68a8aeacdf6a38a2151cb3c4c1d42accf296e19810527988\"}\n{\"status\":\"using already created layer sha256:2759286baa875dc22de5394b4a925701b1896a7e3f8e53275c36f75a877a82c9\"}\n{\"status\":\"writing layer sha256:df30045fe90f0d750db82a058109cecd6d4de9c90a3d75b19c09e5f64580bb42\"}\n{\"status\":\"writing layer sha256:f18a68eb09bf925bb1b669490407c1b1251c5db98dc4d3d81f3088498ea55690\"}\n{\"status\":\"writing manifest\"}\n{\"status\":\"success\"}\n```\n\n",
+    "index": 39
+  },
+  {
+    "heading": "API > Create a Model > Examples > Create a model from GGUF",
+    "text": "API > Create a Model > Examples > Create a model from GGUF\n\nCreate a model from GGUF files. The `files` parameter should contain the file name and SHA256 digest of each GGUF file. For a split GGUF model, include each shard under its original split filename. Use [/api/blobs/:digest](#push-a-blob) to push each file before calling this API.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/create -d '{\n \"model\": \"my-gguf-model\",\n \"files\": {\n \"test.gguf\": \"sha256:432f310a77f4650a88d0fd59ecdd7cebed8d684bafea53cbff0473542964f0c3\"\n }\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```json\n{\"status\":\"parsing GGUF\"}\n{\"status\":\"using existing layer sha256:432f310a77f4650a88d0fd59ecdd7cebed8d684bafea53cbff0473542964f0c3\"}\n{\"status\":\"writing manifest\"}\n{\"status\":\"success\"}\n```\n\n",
+    "index": 40
+  },
+  {
+    "heading": "API > Create a Model > Examples > Create a model from a Safetensors directory",
+    "text": "API > Create a Model > Examples > Create a model from a Safetensors directory\n\nThe `files` parameter should include the file name and SHA256 digest of each file in the Safetensors model. Use [/api/blobs/:digest](#push-a-blob) to push each file before calling this API. Files remain in the cache until the Ollama server is restarted.\n\n Request\n\n```shell\ncurl http://localhost:11434/api/create -d '{\n \"model\": \"fred\",\n \"files\": {\n \"config.json\": \"sha256:dd3443e529fb2290423a0c65c2d633e67b419d273f170259e27297219828e389\",\n \"generation_config.json\": \"sha256:88effbb63300dbbc7390143fbbdd9d9fa50587b37e8bfd16c8c90d4970a74a36\",\n \"special_tokens_map.json\": \"sha256:b7455f0e8f00539108837bfa586c4fbf424e31f8717819a6798be74bef813d05\",\n \"tokenizer.json\": \"sha256:bbc1904d35169c542dffbe1f7589a5994ec7426d9e5b609d07bab876f32e97ab\",\n \"tokenizer_config.json\": \"sha256:24e8a6dc2547164b7002e3125f10b415105644fcf02bf9ad8b674c87b1eaaed6\",\n \"model.safetensors\": \"sha256:1ff795ff6a07e6a68085d206fb84417da2f083f68391c2843cd2b8ac6df8538f\"\n }\n}'\n```\n\n Response\n\nA stream of JSON objects is returned:\n\n```shell\n{\"status\":\"importing fred (2 tensors)\"}\n{\"status\":\"writing manifest for fred\"}\n{\"status\":\"success\"}\n```\n\n",
+    "index": 41
+  },
+  {
+    "heading": "API > Check if a Blob Exists",
+    "text": "API > Check if a Blob Exists\n\n```shell\nHEAD /api/blobs/:digest\n```\n\nEnsures that the file blob (Binary Large Object) used with create a model exists on the server. This checks your Ollama server and not ollama.com.\n\n",
+    "index": 42
+  },
+  {
+    "heading": "API > Check if a Blob Exists > Query Parameters",
+    "text": "API > Check if a Blob Exists > Query Parameters\n\n- `digest`: the SHA256 digest of the blob\n\n",
+    "index": 43
+  },
+  {
+    "heading": "API > Check if a Blob Exists > Examples",
+    "text": "API > Check if a Blob Exists > Examples\n\n Request\n\n```shell\ncurl -I http://localhost:11434/api/blobs/sha256:29fdb92e57cf0827ded04ae6461b5931d01fa595843f55d36f5b275a52087dd2\n```\n\n Response\n\nReturn 200 OK if the blob exists, 404 Not Found if it does not.\n\n",
+    "index": 44
+  },
+  {
+    "heading": "API > Push a Blob",
+    "text": "API > Push a Blob\n\n```\nPOST /api/blobs/:digest\n```\n\nPush a file to the Ollama server to create a \"blob\" (Binary Large Object).\n\n",
+    "index": 45
+  },
+  {
+    "heading": "API > Push a Blob > Query Parameters",
+    "text": "API > Push a Blob > Query Parameters\n\n- `digest`: the expected SHA256 digest of the file\n\n",
+    "index": 46
+  },
+  {
+    "heading": "API > Push a Blob > Examples",
+    "text": "API > Push a Blob > Examples\n\n Request\n\n```shell\ncurl -T model.gguf -X POST http://localhost:11434/api/blobs/sha256:29fdb92e57cf0827ded04ae6461b5931d01fa595843f55d36f5b275a52087dd2\n```\n\n Response\n\nReturn 201 Created if the blob was successfully created, 400 Bad Request if the digest used is not expected.\n\n",
+    "index": 47
+  },
+  {
+    "heading": "API > List Local Models",
+    "text": "API > List Local Models\n\n```\nGET /api/tags\n```\n\nList models that are available locally.\n\n",
+    "index": 48
+  },
+  {
+    "heading": "API > List Local Models > Examples",
+    "text": "API > List Local Models > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/tags\n```\n\n Response\n\nA single JSON object will be returned.\n\n```json\n{\n \"models\": [\n {\n \"name\": \"deepseek-r1:latest\",\n \"model\": \"deepseek-r1:latest\",\n \"modified_at\": \"2025-05-10T08:06:48.639712648-07:00\",\n \"size\": 4683075271,\n \"digest\": \"0a8c266910232fd3291e71e5ba1e058cc5af9d411192cf88b6d30e92b6e73163\",\n \"details\": {\n \"parent_model\": \"\",\n \"format\": \"gguf\",\n \"family\": \"qwen2\",\n \"families\": [\"qwen2\"],\n \"parameter_size\": \"7.6B\",\n \"quantization_level\": \"Q4_K_M\"\n }\n },\n {\n \"name\": \"llama3.2:latest\",\n \"model\": \"llama3.2:latest\",\n \"modified_at\": \"2025-05-04T17:37:44.706015396-07:00\",\n \"size\": 2019393189,\n \"digest\": \"a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72\",\n \"details\": {\n \"parent_model\": \"\",\n \"format\": \"gguf\",\n \"family\": \"llama\",\n \"families\": [\"llama\"],\n \"parameter_size\": \"3.2B\",\n \"quantization_level\": \"Q4_K_M\"\n }\n }\n ]\n}\n```\n\n",
+    "index": 49
+  },
+  {
+    "heading": "API > Show Model Information",
+    "text": "API > Show Model Information\n\n```\nPOST /api/show\n```\n\nShow information about a model including details, modelfile, template, parameters, license, system prompt.\n\n",
+    "index": 50
+  },
+  {
+    "heading": "API > Show Model Information > Parameters",
+    "text": "API > Show Model Information > Parameters\n\n- `model`: name of the model to show\n- `verbose`: (optional) if set to `true`, returns full data for verbose response fields\n\n",
+    "index": 51
+  },
+  {
+    "heading": "API > Show Model Information > Examples",
+    "text": "API > Show Model Information > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/show -d '{\n \"model\": \"llava\"\n}'\n```\n\n Response\n\n```json5\n{\n modelfile: '# Modelfile generated by \"ollama show\"\\n# To build a new Modelfile based on this one, replace the FROM line with:\\n# FROM llava:latest\\n\\nFROM /Users/matt/.ollama/models/blobs/sha256:200765e1283640ffbd013184bf496e261032fa75b99498a9613be4e94d63ad52\\nTEMPLATE \"\"\"{{ .System }}\\nUSER: {{ .Prompt }}\\nASSISTANT: \"\"\"\\nPARAMETER num_ctx 4096\\nPARAMETER stop \"\\u003c/s\\u003e\"\\nPARAMETER stop \"USER:\"\\nPARAMETER stop \"ASSISTANT:\"',\n parameters: 'num_keep 24\\nstop \"<|start_header_id|>\"\\nstop \"<|end_header_id|>\"\\nstop \"<|eot_id|>\"',\n template: \"{{ if .System }}<|start_header_id|>system<|end_header_id|>\\n\\n{{ .System }}<|eot_id|>{{ end }}{{ if .Prompt }}<|start_header_id|>user<|end_header_id|>\\n\\n{{ .Prompt }}<|eot_id|>{{ end }}<|start_header_id|>assistant<|end_header_id|>\\n\\n{{ .Response }}<|eot_id|>\",\n details: {\n parent_model: \"\",\n format: \"gguf\",\n family: \"llama\",\n families: [\"llama\"],\n parameter_size: \"8.0B\",\n quantization_level: \"Q4_0\",\n },\n model_info: {\n \"general.architecture\": \"llama\",\n \"general.file_type\": 2,\n \"general.parameter_count\": 8030261248,\n \"general.quantization_version\": 2,\n \"llama.attention.head_count\": 32,\n \"llama.attention.head_count_kv\": 8,\n \"llama.attention.layer_norm_rms_epsilon\": 0.00001,\n \"llama.block_count\": 32,\n \"llama.context_length\": 8192,\n \"llama.embedding_length\": 4096,\n \"llama.feed_forward_length\": 14336,\n \"llama.rope.dimension_count\": 128,\n \"llama.rope.freq_base\": 500000,\n \"llama.vocab_size\": 128256,\n \"tokenizer.ggml.bos_token_id\": 128000,\n \"tokenizer.ggml.eos_token_id\": 128009,\n \"tokenizer.ggml.merges\": [], // populates if `verbose=true`\n \"tokenizer.ggml.model\": \"gpt2\",\n \"tokenizer.ggml.pre\": \"llama-bpe\",\n \"tokenizer.ggml.token_type\": [], // populates if `verbose=true`\n \"tokenizer.ggml.tokens\": [], // populates if `verbose=true`\n },\n capabilities: [\"completion\", \"vision\"],\n}\n```\n\n",
+    "index": 52
+  },
+  {
+    "heading": "API > Copy a Model",
+    "text": "API > Copy a Model\n\n```\nPOST /api/copy\n```\n\nCopy a model. Creates a model with another name from an existing model.\n\n",
+    "index": 53
+  },
+  {
+    "heading": "API > Copy a Model > Examples",
+    "text": "API > Copy a Model > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/copy -d '{\n \"source\": \"llama3.2\",\n \"destination\": \"llama3-backup\"\n}'\n```\n\n Response\n\nReturns a 200 OK if successful, or a 404 Not Found if the source model doesn't exist.\n\n```json\n{\n \"status\": \"success\"\n}\n```\n\n",
+    "index": 54
+  },
+  {
+    "heading": "API > Delete a Model",
+    "text": "API > Delete a Model\n\n```\nDELETE /api/delete\n```\n\nDelete a model and its data.\n\n",
+    "index": 55
+  },
+  {
+    "heading": "API > Delete a Model > Parameters",
+    "text": "API > Delete a Model > Parameters\n\n- `model`: model name to delete\n\n",
+    "index": 56
+  },
+  {
+    "heading": "API > Delete a Model > Examples",
+    "text": "API > Delete a Model > Examples\n\n Request\n\n```shell\ncurl -X DELETE http://localhost:11434/api/delete -d '{\n \"model\": \"llama3:13b\"\n}'\n```\n\n Response\n\nReturns a 200 OK if successful, 404 Not Found if the model to be deleted doesn't exist.\n\n",
+    "index": 57
+  },
+  {
+    "heading": "API > Pull a Model",
+    "text": "API > Pull a Model\n\n```\nPOST /api/pull\n```\n\nDownload a model from the ollama library. Cancelled pulls are resumed from where they left off, and multiple calls will share the same download progress.\n\n",
+    "index": 58
+  },
+  {
+    "heading": "API > Pull a Model > Parameters",
+    "text": "API > Pull a Model > Parameters\n\n- `model`: name of the model to pull\n- `insecure`: (optional) allow insecure connections to the library. Only use this if you are pulling from your own library during development.\n- `stream`: (optional) if `false` the response will be returned as a single response object, rather than a stream of objects\n\n",
+    "index": 59
+  },
+  {
+    "heading": "API > Pull a Model > Examples",
+    "text": "API > Pull a Model > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/pull -d '{\n \"model\": \"llama3.2\"\n}'\n```\n\n Response\n\nIf `stream` is not specified, or set to `true`, a stream of JSON objects is returned:\n\nThe first object is the manifest:\n\n```json\n{\n \"status\": \"pulling manifest\"\n}\n```\n\nThen there is a series of downloading responses. Until any of the download is completed, the `completed` key may not be included. The number of files to be downloaded depends on the number of layers specified in the manifest.\n\n```json\n{\n \"status\": \"pulling digestname\",\n \"digest\": \"digestname\",\n \"total\": 2142590208,\n \"completed\": 241970\n}\n```\n\nAfter all the files are downloaded, the final responses are:\n\n```json\n{\n \"status\": \"verifying sha256 digest\"\n}\n{\n \"status\": \"writing manifest\"\n}\n{\n \"status\": \"removing any unused layers\"\n}\n{\n \"status\": \"success\"\n}\n```\n\nif `stream` is set to false, then the response is a single JSON object:\n\n```json\n{\n \"status\": \"success\"\n}\n```\n\n",
+    "index": 60
+  },
+  {
+    "heading": "API > Push a Model",
+    "text": "API > Push a Model\n\n```\nPOST /api/push\n```\n\nUpload a model to a model library. Requires registering for ollama.ai and adding a public key first.\n\n",
+    "index": 61
+  },
+  {
+    "heading": "API > Push a Model > Parameters",
+    "text": "API > Push a Model > Parameters\n\n- `model`: name of the model to push in the form of `<namespace>/<model>:<tag>`\n- `insecure`: (optional) allow insecure connections to the library. Only use this if you are pushing to your library during development.\n- `stream`: (optional) if `false` the response will be returned as a single response object, rather than a stream of objects\n\n",
+    "index": 62
+  },
+  {
+    "heading": "API > Push a Model > Examples",
+    "text": "API > Push a Model > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/push -d '{\n \"model\": \"mattw/pygmalion:latest\"\n}'\n```\n\n Response\n\nIf `stream` is not specified, or set to `true`, a stream of JSON objects is returned:\n\n```json\n{ \"status\": \"retrieving manifest\" }\n```\n\nand then:\n\n```json\n{\n \"status\": \"starting upload\",\n \"digest\": \"sha256:bc07c81de745696fdf5afca05e065818a8149fb0c77266fb584d9b2cba3711ab\",\n \"total\": 1928429856\n}\n```\n\nThen there is a series of uploading responses:\n\n```json\n{\n \"status\": \"starting upload\",\n \"digest\": \"sha256:bc07c81de745696fdf5afca05e065818a8149fb0c77266fb584d9b2cba3711ab\",\n \"total\": 1928429856\n}\n```\n\nFinally, when the upload is complete:\n\n```json\n{\"status\":\"pushing manifest\"}\n{\"status\":\"success\"}\n```\n\nIf `stream` is set to `false`, then the response is a single JSON object:\n\n```json\n{ \"status\": \"success\" }\n```\n\n",
+    "index": 63
+  },
+  {
+    "heading": "API > Generate Embeddings",
+    "text": "API > Generate Embeddings\n\n```\nPOST /api/embed\n```\n\nGenerate embeddings from a model\n\n",
+    "index": 64
+  },
+  {
+    "heading": "API > Generate Embeddings > Parameters",
+    "text": "API > Generate Embeddings > Parameters\n\n- `model`: name of model to generate embeddings from\n- `input`: text or list of text to generate embeddings for. To embed media (images or audio) alongside text on models that accept multimodal embeddings, each entry may instead be an object with any of `text` (string), `image` (base64-encoded bytes), `audio` (base64-encoded bytes). In a list, entries can mix plain strings and such objects; each object owns its own media. `video` is not currently accepted.\n\nAdvanced parameters:\n\n- `truncate`: truncates the end of each input to fit within context length. Returns error if `false` and context length is exceeded. Defaults to `true`\n- `options`: additional model parameters listed in the documentation for the [Modelfile](./modelfile.mdx#valid-parameters-and-values) such as `temperature`\n- `keep_alive`: controls how long the model will stay loaded into memory following the request (default: `5m`)\n- `dimensions`: number of dimensions for the embedding\n\n",
+    "index": 65
+  },
+  {
+    "heading": "API > Generate Embeddings > Examples",
+    "text": "API > Generate Embeddings > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/embed -d '{\n \"model\": \"all-minilm\",\n \"input\": \"Why is the sky blue?\"\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"all-minilm\",\n \"embeddings\": [\n [\n 0.010071029, -0.0017594862, 0.05007221, 0.04692972, 0.054916814,\n 0.008599704, 0.105441414, -0.025878139, 0.12958129, 0.031952348\n ]\n ],\n \"total_duration\": 14143917,\n \"load_duration\": 1019500,\n \"prompt_eval_count\": 8\n}\n```\n\n",
+    "index": 66
+  },
+  {
+    "heading": "API > Generate Embeddings > Examples > Request (Multiple input)",
+    "text": "API > Generate Embeddings > Examples > Request (Multiple input)\n\n```shell\ncurl http://localhost:11434/api/embed -d '{\n \"model\": \"all-minilm\",\n \"input\": [\"Why is the sky blue?\", \"Why is the grass green?\"]\n}'\n```\n\n Response\n\n```json\n{\n \"model\": \"all-minilm\",\n \"embeddings\": [\n [\n 0.010071029, -0.0017594862, 0.05007221, 0.04692972, 0.054916814,\n 0.008599704, 0.105441414, -0.025878139, 0.12958129, 0.031952348\n ],\n [\n -0.0098027075, 0.06042469, 0.025257962, -0.006364387, 0.07272725,\n 0.017194884, 0.09032035, -0.051705178, 0.09951512, 0.09072481\n ]\n ]\n}\n```\n\n",
+    "index": 67
+  },
+  {
+    "heading": "API > Generate Embeddings > Examples > Request (With image)",
+    "text": "API > Generate Embeddings > Examples > Request (With image)\n\n```shell\ncurl http://localhost:11434/api/embed -d '{\n \"model\": \"embeddinggemma2\",\n \"input\": {\"text\": \"a cat sitting on a windowsill\", \"image\": \"iVBORw0KGgo...\"}\n}'\n```\n\n",
+    "index": 68
+  },
+  {
+    "heading": "API > Generate Embeddings > Examples > Request (Batched, mixed modalities)",
+    "text": "API > Generate Embeddings > Examples > Request (Batched, mixed modalities)\n\n```shell\ncurl http://localhost:11434/api/embed -d '{\n \"model\": \"embeddinggemma2\",\n \"input\": [\n \"a plain text query\",\n {\"image\": \"iVBORw0KGgo...\"},\n {\"audio\": \"UklGRiQAAABXQVZF...\"}\n ]\n}'\n```\n\n",
+    "index": 69
+  },
+  {
+    "heading": "API > List Running Models",
+    "text": "API > List Running Models\n\n```\nGET /api/ps\n```\n\nList models that are currently loaded into memory.\n\n",
+    "index": 70
+  },
+  {
+    "heading": "API > List Running Models > Examples",
+    "text": "API > List Running Models > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/ps\n```\n\n Response\n\nA single JSON object will be returned.\n\n```json\n{\n \"models\": [\n {\n \"name\": \"mistral:latest\",\n \"model\": \"mistral:latest\",\n \"size\": 5137025024,\n \"digest\": \"2ae6f6dd7a3dd734790bbbf58b8909a606e0e7e97e94b7604e0aa7ae4490e6d8\",\n \"details\": {\n \"parent_model\": \"\",\n \"format\": \"gguf\",\n \"family\": \"llama\",\n \"families\": [\"llama\"],\n \"parameter_size\": \"7.2B\",\n \"quantization_level\": \"Q4_0\"\n },\n \"expires_at\": \"2024-06-04T14:38:31.83753-07:00\",\n \"size_vram\": 5137025024\n }\n ]\n}\n```\n\n",
+    "index": 71
+  },
+  {
+    "heading": "API > Generate Embedding",
+    "text": "API > Generate Embedding\n\n> Note: this endpoint has been superseded by `/api/embed`\n\n```\nPOST /api/embeddings\n```\n\nGenerate embeddings from a model\n\n",
+    "index": 72
+  },
+  {
+    "heading": "API > Generate Embedding > Parameters",
+    "text": "API > Generate Embedding > Parameters\n\n- `model`: name of model to generate embeddings from\n- `prompt`: text to generate embeddings for\n\nAdvanced parameters:\n\n- `options`: additional model parameters listed in the documentation for the [Modelfile](./modelfile.mdx#valid-parameters-and-values) such as `temperature`\n- `keep_alive`: controls how long the model will stay loaded into memory following the request (default: `5m`)\n\n",
+    "index": 73
+  },
+  {
+    "heading": "API > Generate Embedding > Examples",
+    "text": "API > Generate Embedding > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/embeddings -d '{\n \"model\": \"all-minilm\",\n \"prompt\": \"Here is an article about llamas...\"\n}'\n```\n\n Response\n\n```json\n{\n \"embedding\": [\n 0.5670403838157654, 0.009260174818336964, 0.23178744316101074,\n -0.2916173040866852, -0.8924556970596313, 0.8785552978515625,\n -0.34576427936553955, 0.5742510557174683, -0.04222835972905159,\n -0.137906014919281\n ]\n}\n```\n\n",
+    "index": 74
+  },
+  {
+    "heading": "API > Version",
+    "text": "API > Version\n\n```\nGET /api/version\n```\n\nRetrieve the Ollama version\n\n",
+    "index": 75
+  },
+  {
+    "heading": "API > Version > Examples",
+    "text": "API > Version > Examples\n\n Request\n\n```shell\ncurl http://localhost:11434/api/version\n```\n\n Response\n\n```json\n{\n \"version\": \"0.5.1\"\n}\n```\n",
+    "index": 76
+  }
+]
